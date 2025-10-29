@@ -6,20 +6,33 @@ exports.getProfile = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        username: true,
-        email: true,
-        mobile: true,
-        country: true,
-        referralCode: true,
+      include: {
+        wallet: true, // ✅ Include wallet info
+        investments: {
+          include: {
+            plan: true, // ✅ Include plan details for display
+          },
+          orderBy: { createdAt: "desc" },
+        },
       },
     });
-    res.json(user);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ✅ Optionally hide sensitive fields
+    const { password, ...safeUser } = user;
+
+    res.json({
+      ...safeUser,
+      totalInvestments: user.investments.length,
+      activeInvestments: user.investments.filter(
+        (inv) => inv.isActive === true || inv.isActive === "true"
+      ).length,
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching profile:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

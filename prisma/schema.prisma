@@ -48,16 +48,31 @@ model Transaction {
   updatedAt DateTime @updatedAt
 }
 
-model Investment {
-  id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int
-  plan      String
-  amount    Float
-  profit    Float?
-  status    String   @default("Active") // Active, Completed, Cancelled
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model InvestmentPlan {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  amount      Float      // minimum investment amount
+  dailyReturn Float      // e.g., 0.1 for 10%
+  duration    Int?       // in days, null for unlimited
+  createdAt   DateTime   @default(now())
+  investments Investment[]
 }
+
+model Investment {
+  id             Int              @id @default(autoincrement())
+  user           User             @relation(fields: [userId], references: [id])
+  userId         Int
+  plan           InvestmentPlan   @relation(fields: [planId], references: [id])
+  planId         Int
+  investedAmount Float
+  currentAmount  Float            // includes daily profit
+  startDate      DateTime         @default(now())
+  endDate        DateTime?
+  status          String           @default("active")
+  lastProfitDate DateTime?        // tracks last daily profit payout
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+}
+
 
 
