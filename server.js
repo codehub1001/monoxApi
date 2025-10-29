@@ -23,7 +23,13 @@ const io = new Server(server, {
 // Make io accessible in routes/controllers
 app.set("io", io);
 
-app.use(cors());
+app.use(
+  cors({
+    origin: ["https://monox-iota.vercel.app"], // your Vercel frontend URL
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true, // if you’re sending cookies or tokens
+  })
+);
 app.use(express.json());
 
 // API routes
