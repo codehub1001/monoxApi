@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
+    "postinstall": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1",
+
     "seed:admin": "node prisma/seed/adminSeeder.js",
     "seed:plans": "node prisma/seed/investmentPlanSeeder.js",
     "start": "node server.js",
