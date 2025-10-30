@@ -2,13 +2,13 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const generateReferralCode = require("../utils/generateReferralCode");
-const sendEmail = require("../utils/mailer"); // ✅ Corrected import
+const sendEmail = require("../utils/mailer");
 const welcomeTemplate = require("../utils/emailTemplates/welcomeTemplate");
 const loginTemplate = require("../utils/emailTemplates/loginTemplate");
 
 const prisma = new PrismaClient();
 
-// ✅ Register
+// ✅ Register Controller
 exports.register = async (req, res) => {
   try {
     const {
@@ -46,7 +46,7 @@ exports.register = async (req, res) => {
         .json({ success: false, message: "Passwords do not match" });
     }
 
-    // Check if email or username exists
+    // Check if email or username already exists
     const [existingEmail, existingUsername] = await Promise.all([
       prisma.user.findUnique({ where: { email } }),
       prisma.user.findUnique({ where: { username } }),
@@ -66,7 +66,7 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newReferralCode = generateReferralCode(email);
 
-    // Create user + wallet
+    // Create user and wallet
     const user = await prisma.user.create({
       data: {
         firstName,
@@ -84,17 +84,22 @@ exports.register = async (req, res) => {
       include: { wallet: true },
     });
 
-    // JWT token
+    // Generate JWT
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
 
-    // ✅ Send Welcome Email
-    sendEmail({
-      to: user.email,
-      subject: "Welcome to Monox Trades!",
-      html: welcomeTemplate(user.firstName, user.referralCode),
-    }).catch((err) => console.error("Welcome email error:", err));
+    // ✅ Send Welcome Email (awaited)
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Welcome to Monox Trades!",
+        html: welcomeTemplate(user.firstName, user.referralCode),
+      });
+      console.log(`✅ Welcome email sent to ${user.email}`);
+    } catch (err) {
+      console.error("❌ Failed to send welcome email:", err.message);
+    }
 
     res.status(201).json({
       success: true,
@@ -114,7 +119,7 @@ exports.register = async (req, res) => {
   }
 };
 
-// ✅ Login
+// ✅ Login Controller
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -149,13 +154,18 @@ exports.login = async (req, res) => {
 
     const isAdmin = user.role === "ADMIN";
 
-    // ✅ Send Login Notification Email
+    // ✅ Send Login Notification Email (awaited)
     const loginTime = new Date().toLocaleString();
-    sendEmail({
-      to: user.email,
-      subject: "Login Notification - Monox Trades",
-      html: loginTemplate(user.firstName, loginTime, req.ip || "Unknown IP"),
-    }).catch((err) => console.error("Login email error:", err));
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Login Notification - Monox Trades",
+        html: loginTemplate(user.firstName, loginTime, req.ip || "Unknown IP"),
+      });
+      console.log(`✅ Login email sent to ${user.email}`);
+    } catch (err) {
+      console.error("❌ Failed to send login email:", err.message);
+    }
 
     res.json({
       success: true,
