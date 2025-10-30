@@ -8,7 +8,16 @@ const loginTemplate = require("../utils/emailTemplates/loginTemplate");
 
 const prisma = new PrismaClient();
 
-// ✅ Register Controller
+// ✅ Helper for background email sending
+const sendEmailAsync = (options) => {
+  sendEmail(options)
+    .then(() => console.log(`📧 Email sent to ${options.to} (${options.subject})`))
+    .catch((err) => console.error(`❌ Email send error:`, err.message));
+};
+
+// =======================================================
+// ✅ REGISTER CONTROLLER
+// =======================================================
 exports.register = async (req, res) => {
   try {
     const {
@@ -23,7 +32,7 @@ exports.register = async (req, res) => {
       referralCode,
     } = req.body;
 
-    // Field validation
+    // --- Validate input ---
     if (
       !firstName ||
       !lastName ||
@@ -46,7 +55,7 @@ exports.register = async (req, res) => {
         .json({ success: false, message: "Passwords do not match" });
     }
 
-    // Check if email or username already exists
+    // --- Check existing user ---
     const [existingEmail, existingUsername] = await Promise.all([
       prisma.user.findUnique({ where: { email } }),
       prisma.user.findUnique({ where: { username } }),
@@ -62,11 +71,11 @@ exports.register = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Username already taken" });
 
-    // Hash password
+    // --- Hash password ---
     const hashedPassword = await bcrypt.hash(password, 10);
     const newReferralCode = generateReferralCode(email);
 
-    // Create user and wallet
+    // --- Create user and wallet ---
     const user = await prisma.user.create({
       data: {
         firstName,
@@ -77,30 +86,25 @@ exports.register = async (req, res) => {
         country,
         password: hashedPassword,
         referralCode: newReferralCode,
-        wallet: {
-          create: { balance: 0 },
-        },
+        referredBy: referralCode || null,
+        wallet: { create: { balance: 0 } },
       },
       include: { wallet: true },
     });
 
-    // Generate JWT
+    // --- Generate JWT token ---
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
 
-    // ✅ Send Welcome Email (awaited)
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: "Welcome to Monox Trades!",
-        html: welcomeTemplate(user.firstName, user.referralCode),
-      });
-      console.log(`✅ Welcome email sent to ${user.email}`);
-    } catch (err) {
-      console.error("❌ Failed to send welcome email:", err.message);
-    }
+    // --- Send welcome email in background ---
+    sendEmailAsync({
+      to: user.email,
+      subject: "🎉 Welcome to Monox Trades!",
+      html: welcomeTemplate(user.firstName, user.referralCode),
+    });
 
+    // --- Respond immediately ---
     res.status(201).json({
       success: true,
       message: "Registration successful",
@@ -119,11 +123,14 @@ exports.register = async (req, res) => {
   }
 };
 
-// ✅ Login Controller
+// =======================================================
+// ✅ LOGIN CONTROLLER
+// =======================================================
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // --- Validate input ---
     if (!email || !password) {
       return res
         .status(400)
@@ -140,12 +147,14 @@ exports.login = async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found" });
 
+    // --- Validate password ---
     const valid = await bcrypt.compare(password, user.password);
     if (!valid)
       return res
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
 
+    // --- Generate JWT token ---
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET,
@@ -154,19 +163,17 @@ exports.login = async (req, res) => {
 
     const isAdmin = user.role === "ADMIN";
 
-    // ✅ Send Login Notification Email (awaited)
+    // --- Send login email in background ---
     const loginTime = new Date().toLocaleString();
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: "Login Notification - Monox Trades",
-        html: loginTemplate(user.firstName, loginTime, req.ip || "Unknown IP"),
-      });
-      console.log(`✅ Login email sent to ${user.email}`);
-    } catch (err) {
-      console.error("❌ Failed to send login email:", err.message);
-    }
+    const ip = req.headers["x-forwarded-for"] || req.ip || "Unknown IP";
 
+    sendEmailAsync({
+      to: user.email,
+      subject: "🔔 Login Notification - Monox Trades",
+      html: loginTemplate(user.firstName, loginTime, ip),
+    });
+
+    // --- Respond immediately ---
     res.json({
       success: true,
       message: isAdmin ? "Admin login successful" : "Login successful",
