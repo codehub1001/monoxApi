@@ -5,7 +5,6 @@
   "scripts": {
     "postinstall": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1",
-
     "seed:admin": "node prisma/seed/adminSeeder.js",
     "seed:plans": "node prisma/seed/investmentPlanSeeder.js",
     "start": "node server.js",
@@ -29,6 +28,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.10",
     "prisma": "^6.18.0",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
   }
 }

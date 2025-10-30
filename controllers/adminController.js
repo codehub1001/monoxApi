@@ -76,6 +76,15 @@ exports.approveDeposit = async (req, res) => {
       data: { balance: { increment: transaction.amount } },
     });
 
+    // ✅ Notification
+    const io = req.app.get("io");
+    io.emit(`notification-${transaction.userId}`, {
+      title: "Deposit Approved",
+      message: `Your deposit of $${transaction.amount} has been approved and credited to your wallet.`,
+      type: "success",
+      timestamp: new Date(),
+    });
+
     res.json({ success: true, message: "Deposit approved and wallet credited" });
   } catch (err) {
     console.error("Approve deposit error:", err);
@@ -87,10 +96,20 @@ exports.approveDeposit = async (req, res) => {
 exports.declineDeposit = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    await prisma.transaction.update({
+    const transaction = await prisma.transaction.update({
       where: { id },
       data: { status: "Failed" },
     });
+
+    // ✅ Notification
+    const io = req.app.get("io");
+    io.emit(`notification-${transaction.userId}`, {
+      title: "Deposit Declined",
+      message: `Your deposit of $${transaction.amount} was declined.`,
+      type: "error",
+      timestamp: new Date(),
+    });
+
     res.json({ success: true, message: "Deposit declined" });
   } catch (err) {
     console.error("Decline deposit error:", err);
@@ -124,6 +143,15 @@ exports.approveWithdrawal = async (req, res) => {
       data: { status: "Success" },
     });
 
+    // ✅ Notification
+    const io = req.app.get("io");
+    io.emit(`notification-${transaction.userId}`, {
+      title: "Withdrawal Approved",
+      message: `Your withdrawal of $${transaction.amount} has been processed successfully.`,
+      type: "success",
+      timestamp: new Date(),
+    });
+
     res.json({ success: true, message: "Withdrawal approved and wallet debited" });
   } catch (err) {
     console.error("Approve withdrawal error:", err);
@@ -135,10 +163,20 @@ exports.approveWithdrawal = async (req, res) => {
 exports.declineWithdrawal = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    await prisma.transaction.update({
+    const transaction = await prisma.transaction.update({
       where: { id },
       data: { status: "Failed" },
     });
+
+    // ✅ Notification
+    const io = req.app.get("io");
+    io.emit(`notification-${transaction.userId}`, {
+      title: "Withdrawal Declined",
+      message: `Your withdrawal of $${transaction.amount} was declined.`,
+      type: "error",
+      timestamp: new Date(),
+    });
+
     res.json({ success: true, message: "Withdrawal declined" });
   } catch (err) {
     console.error("Decline withdrawal error:", err);
@@ -175,6 +213,14 @@ exports.updateWallet = async (req, res) => {
 
     const io = req.app.get("io");
     io.emit(`wallet-update-${userId}`, { balance: wallet.balance });
+
+    // ✅ Notification
+    io.emit(`notification-${userId}`, {
+      title: `Wallet ${type === "credit" ? "Credited" : "Debited"}`,
+      message: `Your wallet has been ${type === "credit" ? "credited" : "debited"} with $${amount}.`,
+      type: type === "credit" ? "success" : "warning",
+      timestamp: new Date(),
+    });
 
     res.json({ success: true, wallet, transaction, message: `Wallet ${type} successful.` });
   } catch (err) {
