@@ -1,6 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-const sendEmail = require("../utils/mailer");
+const sendEmail = require("../utils/emailService");
 
 // Import your email templates
 const depositApprovedEmail = require("../utils/emailTemplates/depositApproved");

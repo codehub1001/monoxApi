@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const generateReferralCode = require("../utils/generateReferralCode");
-const sendEmail = require("../utils/mailer");
+const sendEmail = require("../utils/emailService");
 const welcomeTemplate = require("../utils/emailTemplates/welcomeTemplate");
 const loginTemplate = require("../utils/emailTemplates/loginTemplate");
 
