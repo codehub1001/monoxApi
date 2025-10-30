@@ -17,8 +17,14 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*" },
+  cors: {
+    origin: ["https://monox-iota.vercel.app"], // frontend URL
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+  transports: ["websocket", "polling"], // allow both transport methods
 });
+
 
 // Make io accessible in routes/controllers
 app.set("io", io);
