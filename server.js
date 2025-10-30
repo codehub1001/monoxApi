@@ -10,55 +10,58 @@ const authRoutes = require("./routes/authRoute");
 const userRoutes = require("./routes/userRoute");
 const walletRoutes = require("./routes/walletRoute");
 const adminRoutes = require("./routes/adminRoute");
-const investmentRoutes = require("./routes/investmentRoute"); // <-- new
+const investmentRoutes = require("./routes/investmentRoute");
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+// --- CORS Setup ---
+const corsOptions = {
+  origin: "https://monox-iota.vercel.app", // frontend URL
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // handle preflight OPTIONS
+
+app.use(express.json());
+
+// --- Socket.IO Setup ---
 const io = new Server(server, {
   cors: {
-    origin: ["https://monox-iota.vercel.app"], // frontend URL
+    origin: "https://monox-iota.vercel.app",
     methods: ["GET", "POST"],
     credentials: true,
   },
-  transports: ["websocket", "polling"], // allow both transport methods
+  transports: ["websocket", "polling"],
 });
-
 
 // Make io accessible in routes/controllers
 app.set("io", io);
 
-app.use(
-  cors({
-    origin: ["https://monox-iota.vercel.app"], // your Vercel frontend URL
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true, // if you’re sending cookies or tokens
-  })
-);
-app.use(express.json());
-
-// API routes
+// --- API Routes ---
 app.use("/api/crypto", cryptoRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api/investments", investmentRoutes); // <-- new
+app.use("/api/investments", investmentRoutes);
 
-// Root route
+// --- Root Route ---
 app.get("/", (req, res) => res.send("✅ Monox API running..."));
 
-// Socket connection
+// --- Socket.IO connection ---
 io.on("connection", (socket) => {
   console.log("New client connected:", socket.id);
 
-  // Optional: listen for custom events here
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
   });
 });
 
-// Start server
+// --- Start Server ---
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
