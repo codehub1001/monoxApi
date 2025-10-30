@@ -1,7 +1,38 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const sendEmail = require("../utils/mailer");
 
-// ✅ Get all users with wallet info
+// Import your email templates
+const depositApprovedEmail = require("../utils/emailTemplates/depositApproved");
+const depositDeclinedEmail = require("../utils/emailTemplates/depositDeclined");
+const withdrawalApprovedEmail = require("../utils/emailTemplates/withdrawalApproved");
+const withdrawalDeclinedEmail = require("../utils/emailTemplates/withdrawalDeclined");
+
+// --- Helper to send email and notification ---
+const notifyUser = async (io, userId, title, message, type, emailTemplate, emailData, email) => {
+  // Socket.IO notification
+  io.emit(`notification-${userId}`, {
+    title,
+    message,
+    type,
+    timestamp: new Date(),
+  });
+
+  // Send email if template exists
+  if (emailTemplate && email) {
+    try {
+      await sendEmail({
+        to: email,
+        subject: title,
+        html: emailTemplate(emailData),
+      });
+    } catch (err) {
+      console.error("Email send error:", err);
+    }
+  }
+};
+
+// --- Users ---
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await prisma.user.findMany({
@@ -15,7 +46,7 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// ✅ Get all pending deposits (case-insensitive)
+// --- Pending Deposits & Withdrawals ---
 exports.getPendingDeposits = async (req, res) => {
   try {
     const deposits = await prisma.transaction.findMany({
@@ -28,7 +59,6 @@ exports.getPendingDeposits = async (req, res) => {
       include: { user: true },
       orderBy: { createdAt: "desc" },
     });
-
     res.json({ success: true, deposits });
   } catch (err) {
     console.error("Error fetching deposits:", err);
@@ -36,7 +66,6 @@ exports.getPendingDeposits = async (req, res) => {
   }
 };
 
-// ✅ Get all pending withdrawals (case-insensitive)
 exports.getPendingWithdrawals = async (req, res) => {
   try {
     const withdrawals = await prisma.transaction.findMany({
@@ -49,7 +78,6 @@ exports.getPendingWithdrawals = async (req, res) => {
       include: { user: true },
       orderBy: { createdAt: "desc" },
     });
-
     res.json({ success: true, withdrawals });
   } catch (err) {
     console.error("Error fetching withdrawals:", err);
@@ -57,33 +85,29 @@ exports.getPendingWithdrawals = async (req, res) => {
   }
 };
 
-// ✅ Approve deposit
+// --- Approve/Decline Deposit ---
 exports.approveDeposit = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const transaction = await prisma.transaction.findUnique({ where: { id }, include: { user: true } });
 
-    const transaction = await prisma.transaction.findUnique({ where: { id } });
     if (!transaction || transaction.type.toLowerCase() !== "deposit")
       return res.status(404).json({ success: false, message: "Deposit not found" });
 
-    await prisma.transaction.update({
-      where: { id },
-      data: { status: "Success" },
-    });
+    await prisma.transaction.update({ where: { id }, data: { status: "Success" } });
+    await prisma.wallet.update({ where: { userId: transaction.userId }, data: { balance: { increment: transaction.amount } } });
 
-    await prisma.wallet.update({
-      where: { userId: transaction.userId },
-      data: { balance: { increment: transaction.amount } },
-    });
-
-    // ✅ Notification
     const io = req.app.get("io");
-    io.emit(`notification-${transaction.userId}`, {
-      title: "Deposit Approved",
-      message: `Your deposit of $${transaction.amount} has been approved and credited to your wallet.`,
-      type: "success",
-      timestamp: new Date(),
-    });
+    await notifyUser(
+      io,
+      transaction.userId,
+      "Deposit Approved",
+      `Your deposit of $${transaction.amount} has been approved and credited.`,
+      "success",
+      depositApprovedEmail,
+      { username: transaction.user.username, amount: transaction.amount },
+      transaction.user.email
+    );
 
     res.json({ success: true, message: "Deposit approved and wallet credited" });
   } catch (err) {
@@ -92,23 +116,26 @@ exports.approveDeposit = async (req, res) => {
   }
 };
 
-// ✅ Decline deposit
 exports.declineDeposit = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const transaction = await prisma.transaction.update({
       where: { id },
       data: { status: "Failed" },
+      include: { user: true },
     });
 
-    // ✅ Notification
     const io = req.app.get("io");
-    io.emit(`notification-${transaction.userId}`, {
-      title: "Deposit Declined",
-      message: `Your deposit of $${transaction.amount} was declined.`,
-      type: "error",
-      timestamp: new Date(),
-    });
+    await notifyUser(
+      io,
+      transaction.userId,
+      "Deposit Declined",
+      `Your deposit of $${transaction.amount} was declined.`,
+      "error",
+      depositDeclinedEmail,
+      { username: transaction.user.username, amount: transaction.amount },
+      transaction.user.email
+    );
 
     res.json({ success: true, message: "Deposit declined" });
   } catch (err) {
@@ -117,40 +144,33 @@ exports.declineDeposit = async (req, res) => {
   }
 };
 
-// ✅ Approve withdrawal
+// --- Approve/Decline Withdrawal ---
 exports.approveWithdrawal = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const transaction = await prisma.transaction.findUnique({ where: { id }, include: { user: true } });
 
-    const transaction = await prisma.transaction.findUnique({ where: { id } });
     if (!transaction || transaction.type.toLowerCase() !== "withdraw")
       return res.status(404).json({ success: false, message: "Withdrawal not found" });
 
-    const wallet = await prisma.wallet.findUnique({
-      where: { userId: transaction.userId },
-    });
-
+    const wallet = await prisma.wallet.findUnique({ where: { userId: transaction.userId } });
     if (wallet.balance < transaction.amount)
       return res.status(400).json({ success: false, message: "Insufficient wallet balance" });
 
-    await prisma.wallet.update({
-      where: { userId: transaction.userId },
-      data: { balance: { decrement: transaction.amount } },
-    });
+    await prisma.wallet.update({ where: { userId: transaction.userId }, data: { balance: { decrement: transaction.amount } } });
+    await prisma.transaction.update({ where: { id }, data: { status: "Success" } });
 
-    await prisma.transaction.update({
-      where: { id },
-      data: { status: "Success" },
-    });
-
-    // ✅ Notification
     const io = req.app.get("io");
-    io.emit(`notification-${transaction.userId}`, {
-      title: "Withdrawal Approved",
-      message: `Your withdrawal of $${transaction.amount} has been processed successfully.`,
-      type: "success",
-      timestamp: new Date(),
-    });
+    await notifyUser(
+      io,
+      transaction.userId,
+      "Withdrawal Approved",
+      `Your withdrawal of $${transaction.amount} has been processed successfully.`,
+      "success",
+      withdrawalApprovedEmail,
+      { username: transaction.user.username, amount: transaction.amount },
+      transaction.user.email
+    );
 
     res.json({ success: true, message: "Withdrawal approved and wallet debited" });
   } catch (err) {
@@ -159,23 +179,26 @@ exports.approveWithdrawal = async (req, res) => {
   }
 };
 
-// ✅ Decline withdrawal
 exports.declineWithdrawal = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const transaction = await prisma.transaction.update({
       where: { id },
       data: { status: "Failed" },
+      include: { user: true },
     });
 
-    // ✅ Notification
     const io = req.app.get("io");
-    io.emit(`notification-${transaction.userId}`, {
-      title: "Withdrawal Declined",
-      message: `Your withdrawal of $${transaction.amount} was declined.`,
-      type: "error",
-      timestamp: new Date(),
-    });
+    await notifyUser(
+      io,
+      transaction.userId,
+      "Withdrawal Declined",
+      `Your withdrawal of $${transaction.amount} was declined.`,
+      "error",
+      withdrawalDeclinedEmail,
+      { username: transaction.user.username, amount: transaction.amount },
+      transaction.user.email
+    );
 
     res.json({ success: true, message: "Withdrawal declined" });
   } catch (err) {
@@ -184,7 +207,7 @@ exports.declineWithdrawal = async (req, res) => {
   }
 };
 
-// ✅ Manual wallet update (credit/debit)
+// --- Manual Wallet Update ---
 exports.updateWallet = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -214,13 +237,12 @@ exports.updateWallet = async (req, res) => {
     const io = req.app.get("io");
     io.emit(`wallet-update-${userId}`, { balance: wallet.balance });
 
-    // ✅ Notification
-    io.emit(`notification-${userId}`, {
-      title: `Wallet ${type === "credit" ? "Credited" : "Debited"}`,
-      message: `Your wallet has been ${type === "credit" ? "credited" : "debited"} with $${amount}.`,
-      type: type === "credit" ? "success" : "warning",
-      timestamp: new Date(),
-    });
+    // Notify user with appropriate template
+    if (type === "credit") {
+      await notifyUser(io, userId, "Wallet Credited", `Your wallet has been credited with $${amount}.`, "success", depositApprovedEmail, { username: transaction.userId, amount }, null);
+    } else {
+      await notifyUser(io, userId, "Wallet Debited", `Your wallet has been debited by $${amount}.`, "warning", withdrawalApprovedEmail, { username: transaction.userId, amount }, null);
+    }
 
     res.json({ success: true, wallet, transaction, message: `Wallet ${type} successful.` });
   } catch (err) {

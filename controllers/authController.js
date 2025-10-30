@@ -2,6 +2,9 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const generateReferralCode = require("../utils/generateReferralCode");
+const sendEmail = require("../utils/mailer");
+const welcomeTemplate = require("../utils/emailTemplates/welcomeTemplate");
+const loginTemplate = require("../utils/emailTemplates/loginTemplate");
 
 const prisma = new PrismaClient();
 
@@ -87,6 +90,13 @@ exports.register = async (req, res) => {
       expiresIn: "7d",
     });
 
+    // ✅ Send Welcome Email
+    sendEmail({
+      to: user.email,
+      subject: "Welcome to Monox Trades!",
+      html: welcomeTemplate(user.firstName, user.referralCode),
+    }).catch((err) => console.error("Welcome email error:", err));
+
     res.status(201).json({
       success: true,
       message: "Registration successful",
@@ -118,7 +128,7 @@ exports.login = async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { email: email.trim() },
-      include: { wallet: true }, // ✅ include wallet for login response
+      include: { wallet: true },
     });
 
     if (!user) {
@@ -134,7 +144,6 @@ exports.login = async (req, res) => {
         .json({ success: false, message: "Invalid credentials" });
     }
 
-    // ✅ Include role in the token
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET,
@@ -143,11 +152,17 @@ exports.login = async (req, res) => {
 
     const isAdmin = user.role === "ADMIN";
 
+    // ✅ Send Login Notification Email
+    const loginTime = new Date().toLocaleString();
+    sendEmail({
+      to: user.email,
+      subject: "Login Notification - Monox Trades",
+      html: loginTemplate(user.firstName, loginTime, req.ip),
+    }).catch((err) => console.error("Login email error:", err));
+
     res.json({
       success: true,
-      message: isAdmin
-        ? "Admin login successful"
-        : "Login successful",
+      message: isAdmin ? "Admin login successful" : "Login successful",
       token,
       user: {
         id: user.id,
@@ -163,4 +178,3 @@ exports.login = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-

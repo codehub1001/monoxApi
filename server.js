@@ -24,8 +24,9 @@ const corsOptions = {
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"],
 };
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // handle preflight OPTIONS
+
+app.use(cors(corsOptions)); // handles preflight OPTIONS automatically
+// app.options("/*", cors(corsOptions)); // optional explicit preflight handling
 
 app.use(express.json());
 
@@ -52,6 +53,12 @@ app.use("/api/investments", investmentRoutes);
 
 // --- Root Route ---
 app.get("/", (req, res) => res.send("✅ Monox API running..."));
+
+// --- 404 Catch-All Middleware ---
+app.use((req, res, next) => {
+  res.status(404).json({ success: false, message: "Route not found" });
+});
+
 
 // --- Socket.IO connection ---
 io.on("connection", (socket) => {
