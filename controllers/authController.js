@@ -2,13 +2,13 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const generateReferralCode = require("../utils/generateReferralCode");
-const sendEmail = require("../utils/mailer");
+const sendEmail = require("../utils/mailer"); // ✅ Corrected import
 const welcomeTemplate = require("../utils/emailTemplates/welcomeTemplate");
 const loginTemplate = require("../utils/emailTemplates/loginTemplate");
 
 const prisma = new PrismaClient();
 
-// Register
+// ✅ Register
 exports.register = async (req, res) => {
   try {
     const {
@@ -23,7 +23,7 @@ exports.register = async (req, res) => {
       referralCode,
     } = req.body;
 
-    // ✅ Validate required fields
+    // Field validation
     if (
       !firstName ||
       !lastName ||
@@ -34,9 +34,10 @@ exports.register = async (req, res) => {
       !password ||
       !confirmPassword
     ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "All fields except referral code are required" });
+      return res.status(400).json({
+        success: false,
+        message: "All fields except referral code are required",
+      });
     }
 
     if (password !== confirmPassword) {
@@ -45,29 +46,27 @@ exports.register = async (req, res) => {
         .json({ success: false, message: "Passwords do not match" });
     }
 
-    // ✅ Check if email or username already exists
+    // Check if email or username exists
     const [existingEmail, existingUsername] = await Promise.all([
       prisma.user.findUnique({ where: { email } }),
       prisma.user.findUnique({ where: { username } }),
     ]);
 
-    if (existingEmail) {
+    if (existingEmail)
       return res
         .status(400)
         .json({ success: false, message: "Email already exists" });
-    }
 
-    if (existingUsername) {
+    if (existingUsername)
       return res
         .status(400)
         .json({ success: false, message: "Username already taken" });
-    }
 
-    // ✅ Hash password
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
     const newReferralCode = generateReferralCode(email);
 
-    // ✅ Create user with wallet
+    // Create user + wallet
     const user = await prisma.user.create({
       data: {
         firstName,
@@ -85,7 +84,7 @@ exports.register = async (req, res) => {
       include: { wallet: true },
     });
 
-    // ✅ JWT token
+    // JWT token
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -115,7 +114,7 @@ exports.register = async (req, res) => {
   }
 };
 
-// Login
+// ✅ Login
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -131,18 +130,16 @@ exports.login = async (req, res) => {
       include: { wallet: true },
     });
 
-    if (!user) {
+    if (!user)
       return res
         .status(404)
         .json({ success: false, message: "User not found" });
-    }
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
+    if (!valid)
       return res
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
-    }
 
     const token = jwt.sign(
       { id: user.id, role: user.role },
@@ -157,7 +154,7 @@ exports.login = async (req, res) => {
     sendEmail({
       to: user.email,
       subject: "Login Notification - Monox Trades",
-      html: loginTemplate(user.firstName, loginTime, req.ip),
+      html: loginTemplate(user.firstName, loginTime, req.ip || "Unknown IP"),
     }).catch((err) => console.error("Login email error:", err));
 
     res.json({
