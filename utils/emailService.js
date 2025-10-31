@@ -1,38 +1,27 @@
-const nodemailer = require("nodemailer");
+// utils/emailService.js
+require("dotenv").config(); // ✅ Load environment variables first
 
-const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: parseInt(process.env.MAIL_PORT) || 587,
-  secure: false, // true for 465, false for 587
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-  tls: {
-    ciphers: "SSLv3",
-    rejectUnauthorized: false,
-  },
-  logger: true,
-  debug: true,
-});
+const Brevo = require("@getbrevo/brevo");
+const apiInstance = new Brevo.TransactionalEmailsApi();
 
-async function sendMail({ to, subject, html }) {
-  console.log(`📬 Sending email to ${to}...`);
+// ✅ Inject API key from .env
+apiInstance.setApiKey(
+  Brevo.TransactionalEmailsApiApiKeys.apiKey,
+  process.env.BREVO_API_KEY
+);
 
+exports.sendMail = async ({ to, subject, html }) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"Monox Trades" <${process.env.MAIL_USER}>`,
-      to,
+    const email = {
+      sender: { name: "Monox Trades", email: "monox@easycoininvest.com" }, // Use your verified sender
+      to: [{ email: to }],
       subject,
-      html,
-    });
+      htmlContent: html,
+    };
 
-    console.log(`✅ Email sent successfully: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    const response = await apiInstance.sendTransacEmail(email);
+    console.log(`✅ Email sent via Brevo API to ${to}`, response);
   } catch (error) {
-    console.error("❌ Failed to send email:", error);
-    return { success: false, error: error.message };
+    console.error("❌ Failed to send email:", error.response?.text || error.message);
   }
-}
-
-module.exports = { sendMail };
+};
