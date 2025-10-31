@@ -13,7 +13,7 @@ apiInstance.setApiKey(
 exports.sendMail = async ({ to, subject, html }) => {
   try {
     const email = {
-      sender: { name: "Monox Trades", email: "monox@easycoininvest.com" }, // Use your verified sender
+      sender: { name: "Monox Trades", email: "monox@deliveryex.express" }, // Use your verified sender
       to: [{ email: to }],
       subject,
       htmlContent: html,
