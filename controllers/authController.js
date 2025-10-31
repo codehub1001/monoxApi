@@ -2,17 +2,20 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const generateReferralCode = require("../utils/generateReferralCode");
-const sendEmail = require("../utils/emailService");
+const sendEmail = require("../utils/emailService"); // STARTTLS on port 587
 const welcomeTemplate = require("../utils/emailTemplates/welcomeTemplate");
 const loginTemplate = require("../utils/emailTemplates/loginTemplate");
 
 const prisma = new PrismaClient();
 
 // ✅ Helper for background email sending
-const sendEmailAsync = (options) => {
-  sendEmail(options)
-    .then(() => console.log(`📧 Email sent to ${options.to} (${options.subject})`))
-    .catch((err) => console.error(`❌ Email send error:`, err.message));
+const sendEmailAsync = async (options) => {
+  try {
+    await sendEmail(options);
+    console.log(`📧 Email sent to ${options.to} (${options.subject})`);
+  } catch (err) {
+    console.error(`❌ Failed to send email to ${options.to}: ${err.message}`);
+  }
 };
 
 // =======================================================
@@ -33,16 +36,7 @@ exports.register = async (req, res) => {
     } = req.body;
 
     // --- Validate input ---
-    if (
-      !firstName ||
-      !lastName ||
-      !username ||
-      !email ||
-      !mobile ||
-      !country ||
-      !password ||
-      !confirmPassword
-    ) {
+    if (!firstName || !lastName || !username || !email || !mobile || !country || !password || !confirmPassword) {
       return res.status(400).json({
         success: false,
         message: "All fields except referral code are required",
@@ -50,9 +44,7 @@ exports.register = async (req, res) => {
     }
 
     if (password !== confirmPassword) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Passwords do not match" });
+      return res.status(400).json({ success: false, message: "Passwords do not match" });
     }
 
     // --- Check existing user ---
@@ -61,15 +53,8 @@ exports.register = async (req, res) => {
       prisma.user.findUnique({ where: { username } }),
     ]);
 
-    if (existingEmail)
-      return res
-        .status(400)
-        .json({ success: false, message: "Email already exists" });
-
-    if (existingUsername)
-      return res
-        .status(400)
-        .json({ success: false, message: "Username already taken" });
+    if (existingEmail) return res.status(400).json({ success: false, message: "Email already exists" });
+    if (existingUsername) return res.status(400).json({ success: false, message: "Username already taken" });
 
     // --- Hash password ---
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -93,9 +78,7 @@ exports.register = async (req, res) => {
     });
 
     // --- Generate JWT token ---
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
     // --- Send welcome email in background ---
     sendEmailAsync({
@@ -132,9 +115,7 @@ exports.login = async (req, res) => {
 
     // --- Validate input ---
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ success: false, message: "All fields are required" });
+      return res.status(400).json({ success: false, message: "All fields are required" });
     }
 
     const user = await prisma.user.findUnique({
@@ -142,24 +123,14 @@ exports.login = async (req, res) => {
       include: { wallet: true },
     });
 
-    if (!user)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     // --- Validate password ---
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid)
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid credentials" });
+    if (!valid) return res.status(401).json({ success: false, message: "Invalid credentials" });
 
     // --- Generate JWT token ---
-    const token = jwt.sign(
-      { id: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
     const isAdmin = user.role === "ADMIN";
 
