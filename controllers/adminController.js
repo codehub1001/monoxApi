@@ -21,7 +21,7 @@ const notifyUser = async (io, userId, title, message, type, emailTemplate, email
   // Send email if template exists
   if (emailTemplate && email) {
     try {
-      await sendEmail({
+      await sendEmail.sendMail({
         to: email,
         subject: title,
         html: emailTemplate(emailData),
@@ -237,7 +237,6 @@ exports.updateWallet = async (req, res) => {
     const io = req.app.get("io");
     io.emit(`wallet-update-${userId}`, { balance: wallet.balance });
 
-    // Notify user with appropriate template
     if (type === "credit") {
       await notifyUser(io, userId, "Wallet Credited", `Your wallet has been credited with $${amount}.`, "success", depositApprovedEmail, { username: transaction.userId, amount }, null);
     } else {
