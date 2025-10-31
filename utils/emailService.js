@@ -1,16 +1,20 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST, // e.g. mail.monoxtrades.com
-  port: parseInt(process.env.MAIL_PORT) || 465,
-  secure: true, // true for SSL/TLS (port 465)
+  host: process.env.MAIL_HOST,
+  port: parseInt(process.env.MAIL_PORT),
+  secure: false, // STARTTLS uses false
   auth: {
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS,
   },
+  tls: {
+    rejectUnauthorized: false,
+  },
   logger: true,
   debug: true,
 });
+
 
 const sendMail = async ({ to, subject, html }) => {
   try {
