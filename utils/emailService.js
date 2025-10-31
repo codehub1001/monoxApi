@@ -3,8 +3,8 @@ require("dotenv").config();
 
 const transporter = nodemailer.createTransport({
   host: "deliveryex.express",     // ✅ SMTP server
-  port: 465,                      // ✅ SSL port
-  secure: true,                   // ✅ must be true for port 465
+  port: 587,                      // ✅ SSL port
+  secure: false,                   // ✅ must be true for port 465
   auth: {
     user: "monox@deliveryex.express",  // ✅ full email address
     pass: process.env.MAIL_PASS,       // ✅ your email password
