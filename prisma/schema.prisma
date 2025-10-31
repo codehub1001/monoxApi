@@ -13,7 +13,8 @@ model User {
   lastName      String
   email         String        @unique
   password      String
-  referralCode  String?
+  referralCode  String?       @unique
+  referredBy     String? 
   referralBonus Float?        @default(0)
   country       String
   mobile        String
