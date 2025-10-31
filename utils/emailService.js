@@ -1,15 +1,19 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
+const transporter = require('nodemailer').createTransport({
   host: process.env.MAIL_HOST,
-  port: parseInt(process.env.MAIL_PORT),
-  secure: true,
+  port: 587,            // Use 587 for STARTTLS
+  secure: false,        // false for STARTTLS
   auth: {
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS,
   },
-  tls: { rejectUnauthorized: false },
+  tls: {
+    ciphers: 'TLSv1.2',   // enforce TLS 1.2
+    rejectUnauthorized: false,
+  },
 });
+
 
 const sendEmail = async ({ to, subject, html }) => {
   try {
