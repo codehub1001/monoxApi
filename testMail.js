@@ -1,5 +1,5 @@
 // testMail.js
-const { sendMail } = require("./utils/emailService"); // ✅ destructure here
+const { sendMail } = require("./utils/emailService"); // ✅ destructure
 
 (async () => {
   try {
