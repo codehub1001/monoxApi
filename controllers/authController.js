@@ -2,17 +2,17 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const generateReferralCode = require("../utils/generateReferralCode");
-const sendEmail = require("../utils/emailService"); // STARTTLS on port 587
+const { sendMail } = require("../utils/emailService"); // ✅ Zentra-style mailer
 const welcomeTemplate = require("../utils/emailTemplates/welcomeTemplate");
 const loginTemplate = require("../utils/emailTemplates/loginTemplate");
 
 const prisma = new PrismaClient();
 
-// ✅ Helper for background email sending
+// ✅ Helper: send email in background (non-blocking)
 const sendEmailAsync = async (options) => {
   try {
-    await sendEmail(options);
-    console.log(`📧 Email sent to ${options.to} (${options.subject})`);
+    await sendMail(options);
+    console.log(`📧 Email sent to ${options.to} | Subject: ${options.subject}`);
   } catch (err) {
     console.error(`❌ Failed to send email to ${options.to}: ${err.message}`);
   }
@@ -35,16 +35,28 @@ exports.register = async (req, res) => {
       referralCode,
     } = req.body;
 
-    // --- Validate input ---
-    if (!firstName || !lastName || !username || !email || !mobile || !country || !password || !confirmPassword) {
+    // --- Validate required fields ---
+    if (
+      !firstName ||
+      !lastName ||
+      !username ||
+      !email ||
+      !mobile ||
+      !country ||
+      !password ||
+      !confirmPassword
+    ) {
       return res.status(400).json({
         success: false,
-        message: "All fields except referral code are required",
+        message: "All fields except referral code are required.",
       });
     }
 
+    // --- Check password match ---
     if (password !== confirmPassword) {
-      return res.status(400).json({ success: false, message: "Passwords do not match" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Passwords do not match." });
     }
 
     // --- Check existing user ---
@@ -53,8 +65,15 @@ exports.register = async (req, res) => {
       prisma.user.findUnique({ where: { username } }),
     ]);
 
-    if (existingEmail) return res.status(400).json({ success: false, message: "Email already exists" });
-    if (existingUsername) return res.status(400).json({ success: false, message: "Username already taken" });
+    if (existingEmail)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email already exists." });
+
+    if (existingUsername)
+      return res
+        .status(400)
+        .json({ success: false, message: "Username already taken." });
 
     // --- Hash password ---
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -78,7 +97,9 @@ exports.register = async (req, res) => {
     });
 
     // --- Generate JWT token ---
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     // --- Send welcome email in background ---
     sendEmailAsync({
@@ -90,7 +111,7 @@ exports.register = async (req, res) => {
     // --- Respond immediately ---
     res.status(201).json({
       success: true,
-      message: "Registration successful",
+      message: "Registration successful.",
       token,
       user: {
         id: user.id,
@@ -102,7 +123,7 @@ exports.register = async (req, res) => {
     });
   } catch (err) {
     console.error("Registration Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ success: false, message: "Server error." });
   }
 };
 
@@ -115,26 +136,39 @@ exports.login = async (req, res) => {
 
     // --- Validate input ---
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: "All fields are required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required." });
     }
 
+    // --- Find user ---
     const user = await prisma.user.findUnique({
       where: { email: email.trim() },
       include: { wallet: true },
     });
 
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found." });
 
-    // --- Validate password ---
+    // --- Compare password ---
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ success: false, message: "Invalid credentials" });
+    if (!valid)
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid credentials." });
 
-    // --- Generate JWT token ---
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    // --- Generate token ---
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     const isAdmin = user.role === "ADMIN";
 
-    // --- Send login email in background ---
+    // --- Send login notification ---
     const loginTime = new Date().toLocaleString();
     const ip = req.headers["x-forwarded-for"] || req.ip || "Unknown IP";
 
@@ -144,10 +178,10 @@ exports.login = async (req, res) => {
       html: loginTemplate(user.firstName, loginTime, ip),
     });
 
-    // --- Respond immediately ---
+    // --- Respond ---
     res.json({
       success: true,
-      message: isAdmin ? "Admin login successful" : "Login successful",
+      message: isAdmin ? "Admin login successful." : "Login successful.",
       token,
       user: {
         id: user.id,
@@ -160,6 +194,6 @@ exports.login = async (req, res) => {
     });
   } catch (err) {
     console.error("Login Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ success: false, message: "Server error." });
   }
 };
