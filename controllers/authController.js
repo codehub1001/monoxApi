@@ -2,20 +2,19 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const generateReferralCode = require("../utils/generateReferralCode");
-const sendEmail = require("../utils/emailService"); // your email helper
+const sendEmail = require("../utils/emailService"); // STARTTLS on port 587
 const welcomeTemplate = require("../utils/emailTemplates/welcomeTemplate");
 const loginTemplate = require("../utils/emailTemplates/loginTemplate");
 
 const prisma = new PrismaClient();
 
-// ✅ Helper for background email sending with proper logging
+// ✅ Helper for background email sending
 const sendEmailAsync = async (options) => {
   try {
-    const info = await sendEmail(options);
-    console.log(`📧 Email successfully sent to ${options.to} | Subject: ${options.subject} | Response: ${info.response}`);
+    await sendEmail(options);
+    console.log(`📧 Email sent to ${options.to} (${options.subject})`);
   } catch (err) {
-    console.error(`❌ Failed to send email to ${options.to} | Subject: ${options.subject}`);
-    console.error(err.stack);
+    console.error(`❌ Failed to send email to ${options.to}: ${err.message}`);
   }
 };
 
@@ -38,8 +37,12 @@ exports.register = async (req, res) => {
 
     // --- Validate input ---
     if (!firstName || !lastName || !username || !email || !mobile || !country || !password || !confirmPassword) {
-      return res.status(400).json({ success: false, message: "All fields except referral code are required" });
+      return res.status(400).json({
+        success: false,
+        message: "All fields except referral code are required",
+      });
     }
+
     if (password !== confirmPassword) {
       return res.status(400).json({ success: false, message: "Passwords do not match" });
     }
@@ -77,7 +80,7 @@ exports.register = async (req, res) => {
     // --- Generate JWT token ---
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-    // --- Send welcome email asynchronously ---
+    // --- Send welcome email in background ---
     sendEmailAsync({
       to: user.email,
       subject: "🎉 Welcome to Monox Trades!",
@@ -111,7 +114,9 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     // --- Validate input ---
-    if (!email || !password) return res.status(400).json({ success: false, message: "All fields are required" });
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
 
     const user = await prisma.user.findUnique({
       where: { email: email.trim() },
@@ -129,7 +134,7 @@ exports.login = async (req, res) => {
 
     const isAdmin = user.role === "ADMIN";
 
-    // --- Send login email asynchronously ---
+    // --- Send login email in background ---
     const loginTime = new Date().toLocaleString();
     const ip = req.headers["x-forwarded-for"] || req.ip || "Unknown IP";
 
