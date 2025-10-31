@@ -1,5 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const sendEmail = require("../utils/emailService");
+const investmentActivatedTemplate = require("../utils/emailTemplates/investmentActivatedTemplate"); // we'll create this next
 
 // ✅ Create investment
 exports.createInvestment = async (req, res) => {
@@ -7,7 +9,6 @@ exports.createInvestment = async (req, res) => {
   const userId = req.user.id; // from authMiddleware
 
   try {
-    // Ensure numeric values
     planId = parseInt(planId);
     amount = parseFloat(amount);
 
@@ -15,15 +16,12 @@ exports.createInvestment = async (req, res) => {
       return res.status(400).json({ error: "Invalid plan or amount" });
     }
 
-    // Find plan
     const plan = await prisma.investmentPlan.findUnique({ where: { id: planId } });
     if (!plan) return res.status(404).json({ error: "Plan not found" });
 
-    // Validate amount
     if (amount < plan.amount)
       return res.status(400).json({ error: "Amount too low for this plan" });
 
-    // Get user and wallet
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { wallet: true },
@@ -34,18 +32,16 @@ exports.createInvestment = async (req, res) => {
     if (user.wallet.balance < amount)
       return res.status(400).json({ error: "Insufficient wallet balance" });
 
-    // ✅ Deduct amount from wallet
+    // ✅ Deduct wallet balance
     await prisma.wallet.update({
       where: { id: user.wallet.id },
       data: { balance: { decrement: amount } },
     });
 
-    // Calculate end date
     const endDate = plan.duration
       ? new Date(Date.now() + plan.duration * 24 * 60 * 60 * 1000)
       : null;
 
-    // Create investment record
     const investment = await prisma.investment.create({
       data: {
         userId,
@@ -59,6 +55,18 @@ exports.createInvestment = async (req, res) => {
       },
       include: { plan: true },
     });
+
+    // ✅ Send email notification
+    try {
+      await sendEmail(
+        user.email,
+        "Investment Activated Successfully ✅",
+        investmentActivatedTemplate(user.firstName, investment)
+      );
+      console.log(`📩 Investment activation mail sent to ${user.email}`);
+    } catch (mailErr) {
+      console.error("❌ Failed to send investment email:", mailErr);
+    }
 
     res.json({ success: true, message: "Investment activated successfully", investment });
   } catch (err) {
