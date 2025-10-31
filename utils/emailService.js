@@ -2,32 +2,30 @@ const nodemailer = require("nodemailer");
 require("dotenv").config();
 
 const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,               // e.g., your SMTP host
-  port: parseInt(process.env.MAIL_PORT) || 587, // use 587 or 2525 on Render
-  secure: parseInt(process.env.MAIL_PORT) === 465, // SSL only if port 465
+  host: "deliveryex.express",     // ✅ SMTP server
+  port: 465,                      // ✅ SSL port
+  secure: true,                   // ✅ must be true for port 465
   auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
+    user: "monox@deliveryex.express",  // ✅ full email address
+    pass: process.env.MAIL_PASS,       // ✅ your email password
   },
   tls: {
-    rejectUnauthorized: false, // allows self-signed certs
+    rejectUnauthorized: false,    // allows self-signed certificates
   },
-  logger: true,
-  debug: true,
 });
 
-// Verify transporter connection
 transporter.verify((err, success) => {
-  if (err) console.error("❌ Email transporter error:", err);
-  else console.log("✅ Email transporter ready to send messages");
+  if (err) {
+    console.error("❌ Transporter connection failed:", err);
+  } else {
+    console.log("✅ Transporter ready to send emails");
+  }
 });
 
-// Send email function, keeps content intact
 const sendEmail = async ({ to, subject, html }) => {
   try {
-    console.log("📬 Sending email to:", to);
     const info = await transporter.sendMail({
-      from: `"Monox Trades" <${process.env.MAIL_USER}>`,
+      from: `"Monox Trades" <monox@deliveryex.express>`,
       to,
       subject,
       html,
@@ -36,7 +34,7 @@ const sendEmail = async ({ to, subject, html }) => {
     return info;
   } catch (error) {
     console.error(`❌ Failed to send email: ${error.message}`);
-    throw error; // allows controllers to catch the error
+    throw error;
   }
 };
 
