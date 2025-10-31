@@ -27,7 +27,7 @@ const sendEmail = async ({ to, subject, html }) => {
   try {
     console.log("📬 Sending email to:", to);
     const info = await transporter.sendMail({
-      from: `"Monox Trades" <${process.env.EMAIL_USER}>`,
+      from: `"Monox Trades" <${process.env.MAIL_USER}>`,
       to,
       subject,
       html,
