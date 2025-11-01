@@ -17,23 +17,34 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// --- CORS Setup ---
+// --- Dynamic CORS Setup ---
+const allowedOrigins = [
+  "https://monox-iota.vercel.app",
+  "https://monotrades.com",
+  "http://localhost:5173",
+];
+
 const corsOptions = {
-  origin: "https://monox-iota.vercel.app", // frontend URL
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like Postman)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions)); // handles preflight OPTIONS automatically
-// app.options("/*", cors(corsOptions)); // optional explicit preflight handling
-
 app.use(express.json());
 
 // --- Socket.IO Setup ---
 const io = new Server(server, {
   cors: {
-    origin: ["https://monox-iota.vercel.app","https://monotrades.com", "http://localhost:5173"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -58,7 +69,6 @@ app.get("/", (req, res) => res.send("✅ Monox API running..."));
 app.use((req, res, next) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });
-
 
 // --- Socket.IO connection ---
 io.on("connection", (socket) => {
