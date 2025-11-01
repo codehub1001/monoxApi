@@ -20,7 +20,7 @@ const server = http.createServer(app);
 // --- Dynamic CORS Setup ---
 const allowedOrigins = [
   "https://monox-iota.vercel.app",
-  "https://monotrades.com",
+  "https://monoxtrades.com",
   "http://localhost:5173",
 ];
 
