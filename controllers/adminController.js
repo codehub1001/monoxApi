@@ -249,3 +249,27 @@ exports.updateWallet = async (req, res) => {
     res.status(500).json({ success: false, message: "Wallet update failed" });
   }
 };
+// --- Fetch all active investments ---
+exports.getAllActiveInvestments = async (req, res) => {
+  try {
+    const activeInvestments = await prisma.investment.findMany({
+      where: { status: "active" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+        plan: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({ success: true, activeInvestments });
+  } catch (err) {
+    console.error("Error fetching active investments:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch active investments" });
+  }
+};

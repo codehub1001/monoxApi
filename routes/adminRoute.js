@@ -21,5 +21,7 @@ router.post("/withdrawals/:id/decline", adminController.declineWithdrawal);
 
 // ✅ Manual wallet update
 router.post("/wallet/:userId/update", adminController.updateWallet);
+// ✅ Active Investments (new)
+router.get("/investments/active", adminController.getAllActiveInvestments);
 
 module.exports = router;
