@@ -33,7 +33,7 @@ app.use(express.json());
 // --- Socket.IO Setup ---
 const io = new Server(server, {
   cors: {
-    origin: "https://monox-iota.vercel.app",
+    origin: ["https://monox-iota.vercel.app","https://monotrades.com", "http://localhost:5173"],
     methods: ["GET", "POST"],
     credentials: true,
   },
