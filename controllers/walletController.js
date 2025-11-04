@@ -1,5 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const sendEmail = require("../utils/emailService");
+const transactionRequestTemplate = require("../utils/emailTemplates/transactionRequestTemplate");
 
 // Get wallet
 exports.getWallet = async (req, res) => {
@@ -9,8 +11,9 @@ exports.getWallet = async (req, res) => {
     });
 
     if (!wallet) {
-      // Auto-create wallet if missing
-      const newWallet = await prisma.wallet.create({ data: { userId: req.user.id, balance: 0 } });
+      const newWallet = await prisma.wallet.create({
+        data: { userId: req.user.id, balance: 0 },
+      });
       return res.json({ balance: newWallet.balance });
     }
 
@@ -25,22 +28,35 @@ exports.getWallet = async (req, res) => {
 exports.deposit = async (req, res) => {
   try {
     const { amount } = req.body;
-    if (!amount || amount <= 0) 
+    if (!amount || amount <= 0)
       return res.status(400).json({ error: "Invalid amount" });
 
-    // Create a pending transaction only
     const transaction = await prisma.transaction.create({
       data: {
         userId: req.user.id,
         type: "deposit",
         amount: parseFloat(amount),
-        status: "pending", // pending until admin approves
+        status: "pending",
       },
+      include: { user: true },
+    });
+
+    // ✅ Notify admin via email
+    const adminEmail = "admin@monoxtrades.com";
+    await sendEmail.sendMail({
+      to: adminEmail,
+      subject: "🟢 New Deposit Request Pending Approval",
+      html: transactionRequestTemplate({
+        username: transaction.user.username || transaction.user.email,
+        type: "Deposit",
+        amount: transaction.amount,
+        date: transaction.createdAt,
+      }),
     });
 
     res.status(201).json({
       success: true,
-      message: "Deposit request submitted and is pending admin approval.",
+      message: "Deposit request submitted and pending admin approval.",
       transaction,
     });
   } catch (error) {
@@ -49,31 +65,45 @@ exports.deposit = async (req, res) => {
   }
 };
 
-
 // Withdraw request
 exports.withdraw = async (req, res) => {
   try {
     const { amount } = req.body;
-    if (!amount || amount <= 0) 
+    if (!amount || amount <= 0)
       return res.status(400).json({ error: "Invalid amount" });
 
-    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user.id } });
-    if (!wallet || wallet.balance < amount) 
+    const wallet = await prisma.wallet.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (!wallet || wallet.balance < amount)
       return res.status(400).json({ error: "Insufficient balance" });
 
-    // Create a pending withdrawal transaction
     const transaction = await prisma.transaction.create({
       data: {
         userId: req.user.id,
         type: "withdraw",
         amount: parseFloat(amount),
-        status: "pending", // pending until admin approves
+        status: "pending",
       },
+      include: { user: true },
+    });
+
+    // ✅ Notify admin via email
+    const adminEmail = "admin@monoxtrades.com";
+    await sendEmail.sendMail({
+      to: adminEmail,
+      subject: "🟠 New Withdrawal Request Pending Approval",
+      html: transactionRequestTemplate({
+        username: transaction.user.username || transaction.user.email,
+        type: "Withdrawal",
+        amount: transaction.amount,
+        date: transaction.createdAt,
+      }),
     });
 
     res.status(201).json({
       success: true,
-      message: "Withdrawal request submitted and is pending admin approval.",
+      message: "Withdrawal request submitted and pending admin approval.",
       transaction,
     });
   } catch (error) {
@@ -81,7 +111,6 @@ exports.withdraw = async (req, res) => {
     res.status(500).json({ error: "Server error during withdrawal" });
   }
 };
-
 
 // Get all transactions
 exports.getTransactions = async (req, res) => {
